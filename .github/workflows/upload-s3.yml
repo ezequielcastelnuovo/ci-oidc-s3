@@ -1,0 +1,52 @@
+name: Upload artifact to S3 via OIDC
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # necesario para OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  OUTFILE: artifact.txt
+
+jobs:
+  upload:
+    name: Build metadata file and upload to S3
+    runs-on: ubuntu-latest
+    environment: prod   # <-- usa tu Environment con vars y secrets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::979244568430:role/GitHubActionsS3UploaderRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-${{ github.run_id }}
+
+      - name: Build metadata file
+        shell: bash
+        run: |
+          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "timestamp_utc=$ts" > "$OUTFILE"
+          echo "repo=${{ github.repository }}" >> "$OUTFILE"
+          echo "run_id=${{ github.run_id }}" >> "$OUTFILE"
+          echo "branch=${{ github.ref_name }}" >> "$OUTFILE"
+          echo "APP_ENV=${{ vars.APP_ENV }}" >> "$OUTFILE"
+          echo "S3_BUCKET=${{ vars.S3_BUCKET }}" >> "$OUTFILE"
+          echo "S3_PREFIX=${{ vars.S3_PREFIX }}" >> "$OUTFILE"
+          echo "APP_TOKEN=${{ secrets.APP_TOKEN }}" >> "$OUTFILE"
+          echo "Archivo generado: $OUTFILE"
+
+      - name: Upload to S3
+        shell: bash
+        run: |
+          key="${{ vars.S3_PREFIX }}run-${{ github.run_id }}-${{ env.OUTFILE }}"
+          aws s3 cp "$OUTFILE" "s3://${{ vars.S3_BUCKET }}/${key}"
+          echo "Subido a s3://${{ vars.S3_BUCKET }}/${key}"
