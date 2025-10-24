@@ -1,2 +1,2 @@
 # ci-oidc-s3
-Laboratorio CI/CD con OIDC y S3
+Lab CI/CD con OIDC y S3
